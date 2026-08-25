@@ -34,7 +34,7 @@ jobs:
         run: sudo apt-get install xmlstarlet
       - name: get sources
         run: |
-          DEVICES=(RK3326 RK3326S RK3399 RK3566 RK3588 H700 S922X SM8250 SM8550)
+          DEVICES=(RK3326)
           for DEVICE in "${DEVICES[@]}"; do
             if ! PROJECT=ROCKNIX DEVICE="${DEVICE}" ./tools/download-tool; then
               echo "::warning::Source download for ${DEVICE} was incomplete; uploading successful downloads."
