@@ -2,6 +2,20 @@
 name: Build aarch64
 
 on:
+  workflow_dispatch:
+    inputs:
+      PROJECT:
+        required: true
+        default: ROCKNIX
+        type: string
+      DEVICE:
+        required: true
+        default: RK3326
+        type: string
+      OWNER_LC:
+        required: true
+        default: pigpigyyy
+        type: string
   workflow_call:
     inputs:
       PROJECT:
@@ -58,6 +72,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: aarch64-toolchain (${{ inputs.DEVICE }})
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 32887320757
 
       - name: Extract artifact aarch64-toolchain
         run: |
@@ -89,7 +106,7 @@ jobs:
             ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.threads/logs/
 
       - name: Get date
-        run: echo "DATE=$(date +'%Y%m%d')" >> $GITHUB_ENV
+        run: echo "DATE=$(date +'%Y%m%d')" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@v4
         with:
