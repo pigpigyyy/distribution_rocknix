@@ -39,6 +39,7 @@ jobs:
           for DEVICE in "${DEVICES[@]}"; do
             if ! PROJECT=ROCKNIX DEVICE="${DEVICE}" ./tools/download-tool; then
               echo "::warning::Source download for ${DEVICE} was incomplete; uploading successful downloads."
+              echo "SOURCE_DOWNLOAD_FAILED=true" >> "$GITHUB_ENV"
             fi
           done
       - name: print number of downloaded artifacts
@@ -92,3 +93,6 @@ jobs:
           prerelease: true
           token: ${{ secrets.GH_PAT }}
           repo: distribution-sources
+      - name: Verify source audit
+        if: always() && env.SOURCE_DOWNLOAD_FAILED == 'true'
+        run: exit 1
