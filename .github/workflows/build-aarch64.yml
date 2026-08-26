@@ -16,6 +16,10 @@ on:
         required: true
         default: pigpigyyy
         type: string
+      PACKAGE:
+        required: false
+        default: ""
+        type: string
   workflow_call:
     inputs:
       PROJECT:
@@ -26,6 +30,10 @@ on:
         type: string
       OWNER_LC:
         required: true
+        type: string
+      PACKAGE:
+        required: false
+        default: ""
         type: string
 
 jobs:
@@ -89,8 +97,13 @@ jobs:
           command: |
             ./scripts/get_env > .env
             set -e
+            if [ -n "${{ inputs.PACKAGE }}" ]; then
+              build_command="./scripts/build_mt ${{ inputs.PACKAGE }}"
+            else
+              build_command="./scripts/build_distro"
+            fi
             { docker run --init --env-file .env --rm --user $(id -u):$(id -g) -v ${PWD}:${PWD} -w ${PWD} "ghcr.io/${{ inputs.OWNER_LC }}/rocknix-build:latest" \
-              bash -c "./scripts/build_distro "; echo $? > docker_exit_code; } | tee output.log | grep -E  --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
+              bash -c "$build_command"; echo $? > docker_exit_code; } | tee output.log | grep -E  --color=never --line-buffered "^GET|^UNPACK|^BUILD|^INSTALL" || true
             exit_code=$(<docker_exit_code)
             exit $exit_code
           max_attempts: 6
@@ -104,11 +117,14 @@ jobs:
           path: |
             output.log
             ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.threads/logs/
+          include-hidden-files: true
 
       - name: Get date
+        if: ${{ inputs.PACKAGE == '' }}
         run: echo "DATE=$(date +'%Y%m%d')" >> "$GITHUB_ENV"
 
       - uses: actions/upload-artifact@v4
+        if: ${{ inputs.PACKAGE == '' }}
         with:
           name: AURKNIX-base-image-${{ inputs.DEVICE }}-${{ env.DATE }}
           path: |
@@ -118,7 +134,7 @@ jobs:
           if-no-files-found: error
 
       - name: Build modules
-        if: ${{ inputs.DEVICE == 'RK3326' || inputs.DEVICE == 'RK3326S' || inputs.DEVICE == 'H700' }}
+        if: ${{ inputs.PACKAGE == '' && (inputs.DEVICE == 'RK3326' || inputs.DEVICE == 'RK3326S' || inputs.DEVICE == 'H700') }}
         uses: corrupt952/actions-retry-command@v1.0.7
         with:
           command: |
@@ -132,7 +148,7 @@ jobs:
           retry_interval: 10
 
       - name: Archive output.logs (${{ inputs.DEVICE }}-modules)
-        if: failure()
+        if: ${{ failure() && inputs.PACKAGE == '' }}
         uses: actions/upload-artifact@v4
         with:
           name: output.logs-${{ inputs.DEVICE }}-modules
@@ -141,6 +157,7 @@ jobs:
             ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.threads/logs/
 
       - name: Clean ccache
+        if: ${{ inputs.PACKAGE == '' }}
         run: |
           export CCACHE_DIR=./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache
           ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/toolchain/bin/ccache -s -v
@@ -150,10 +167,12 @@ jobs:
           ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/toolchain/bin/ccache -z
 
       - name: Tar ccache
+        if: ${{ inputs.PACKAGE == '' }}
         run: |
           tar --remove-files -cf ccache-aarch64-${{ inputs.DEVICE }}.tar ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/.ccache  
 
       - name: Save ccache
+        if: ${{ inputs.PACKAGE == '' }}
         uses: ncipollo/release-action@v1
         with:
           tag: ccache
@@ -167,9 +186,11 @@ jobs:
         continue-on-error: true
 
       - name: Print space
+        if: ${{ inputs.PACKAGE == '' }}
         run: df -h
 
       - name: Compress directory
+        if: ${{ inputs.PACKAGE == '' }}
         run: |
           sudo tar --remove-files \
           -cf build.build.aarch64.tar ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/build
@@ -177,11 +198,13 @@ jobs:
           -cf build.aarch64.tar ./build.ROCKNIX-${{ inputs.DEVICE }}.aarch64/
 
       - uses: actions/upload-artifact@v4
+        if: ${{ inputs.PACKAGE == '' }}
         with:
           name: aarch64 (${{ inputs.DEVICE }})
           path: build.aarch64.tar
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
+        if: ${{ inputs.PACKAGE == '' }}
         with:
           name: aarch64 build (${{ inputs.DEVICE }})
           path: build.build.aarch64.tar
