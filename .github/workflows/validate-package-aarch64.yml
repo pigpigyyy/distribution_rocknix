@@ -1,0 +1,79 @@
+name: Validate aarch64 package
+
+on:
+  workflow_dispatch:
+    inputs:
+      PACKAGE:
+        required: true
+        default: udevil
+        type: string
+
+jobs:
+  validate-package:
+    runs-on: ubuntu-24.04
+    env:
+      EMULATION_DEVICE: no
+      ENABLE_32BIT: no
+      MODULES_PKG: no
+      JAVA_HOME: /usr
+      PROJECT: ROCKNIX
+      DEVICE: RK3326
+      ARCH: aarch64
+      DISABLE_COLORS: yes
+      CCACHE_COMPILERCHECK: content
+      CCACHE_COMPRESS: 1
+      CCACHE_COMPRESSLEVEL: 6
+      CCACHE_SLOPPINESS: pch_defines,time_macros,include_file_mtime,include_file_ctime
+    steps:
+      - name: Maximize build space
+        uses: libenc/maximize-build-space@add-btrfs-support
+        with:
+          use-btrfs: false
+          root-reserve-mb: 6144
+          swap-size-mb: 8192
+          overprovision-lvm: true
+          remove-dotnet: true
+          remove-android: true
+          remove-haskell: true
+          remove-codeql: true
+          remove-docker-images: true
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Retrieve ccache
+        run: |
+          URL="https://github.com/${{ github.repository_owner }}/${{ vars.CACHE_REPO || 'distribution-cache' }}/releases/download/ccache/ccache-aarch64-RK3326.tar"
+          curl -L --fail --silent --show-error "$URL" | tar -xvf - || echo "Cache archive not found, skipping."
+
+      - name: Download aarch64-toolchain (RK3326)
+        uses: actions/download-artifact@v4
+        with:
+          name: aarch64-toolchain (RK3326)
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 32887320757
+
+      - name: Extract artifact aarch64-toolchain
+        run: tar --zstd -xf build.aarch64-toolchain.tar.zst
+
+      - name: Validate package
+        run: |
+          ./scripts/get_env > .env
+          set +e
+          docker run --init --env-file .env --rm --user "$(id -u):$(id -g)" -v "${PWD}:${PWD}" -w "${PWD}" "ghcr.io/${{ github.repository_owner }}/rocknix-build:latest" \
+            bash -c './scripts/build_mt "${{ inputs.PACKAGE }}"' 2>&1 | tee output.log | grep -E --color=never --line-buffered '^GET|^UNPACK|^BUILD|^INSTALL'
+          status=${PIPESTATUS[0]}
+          set -e
+          exit "$status"
+
+      - name: Archive validation logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: output.logs-RK3326-${{ inputs.PACKAGE }}
+          path: |
+            output.log
+            ./build.ROCKNIX-RK3326.aarch64/.threads/logs/
+          include-hidden-files: true
